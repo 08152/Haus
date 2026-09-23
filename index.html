@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>CC0 Block World</title>
+<style>
+html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#87ceeb;
+    font-family:Arial,sans-serif;
+}
+#info{
+    position:fixed;
+    top:15px;
+    left:15px;
+    z-index:10;
+    color:white;
+    background:rgba(0,0,0,.55);
+    padding:10px 14px;
+    border-radius:8px;
+    pointer-events:none;
+}
+#crosshair{
+    position:fixed;
+    left:50%;
+    top:50%;
+    width:14px;
+    height:14px;
+    transform:translate(-50%,-50%);
+    z-index:20;
+    pointer-events:none;
+}
+#crosshair:before,#crosshair:after{
+    content:"";
+    position:absolute;
+    background:white;
+    box-shadow:0 0 2px black;
+}
+#crosshair:before{
+    width:14px;
+    height:2px;
+    top:6px;
+    left:0;
+}
+#crosshair:after{
+    width:2px;
+    height:14px;
+    left:6px;
+    top:0;
+}
+#start{
+    position:fixed;
+    inset:0;
+    z-index:30;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(0,0,0,.45);
+}
+button{
+    font-size:20px;
+    padding:16px 28px;
+    border:0;
+    border-radius:10px;
+    cursor:pointer;
+}
+</style>
+</head>
+<body>
+
+<div id="info">
+    <b>CC0 BLOCK WORLD</b><br>
+    WASD = Bewegen<br>
+    Maus = Umschauen<br>
+    ESC = Maus freigeben
+</div>
+
+<div id="crosshair"></div>
+
+<div id="start">
+    <button id="play">SPIEL STARTEN</button>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.min.js"></script>
+
+<script>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 35, 110);
+
+const camera = new THREE.PerspectiveCamera(
+    75,
+    innerWidth / innerHeight,
+    0.05,
+    300
+);
+
+camera.position.set(0,4,8);
+
+const renderer = new THREE.WebGLRenderer({
+    antialias:false,
+    powerPreference:"high-performance"
+});
+
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+
+/* -------------------------------------------------
+   CC0-STYLE PROCEDURAL TEXTURES
+   Diese Texturen werden komplett im Browser erzeugt.
+------------------------------------------------- */
+
+function texture(base, spots, size=16){
+    const c=document.createElement("canvas");
+    c.width=size;
+    c.height=size;
+
+    const x=c.getContext("2d");
+
+    x.fillStyle=base;
+    x.fillRect(0,0,size,size);
+
+    for(let i=0;i<35;i++){
+        x.fillStyle=spots[Math.floor(Math.random()*spots.length)];
+        const px=Math.floor(Math.random()*size);
+        const py=Math.floor(Math.random()*size);
+        const s=1+Math.floor(Math.random()*2);
+        x.fillRect(px,py,s,s);
+    }
+
+    const t=new THREE.CanvasTexture(c);
+    t.magFilter=THREE.NearestFilter;
+    t.minFilter=THREE.NearestFilter;
+    t.colorSpace=THREE.SRGBColorSpace;
+    return t;
+}
+
+const grassTop=texture("#65a33d",[
+    "#4f8d32","#75b64a","#5b9638","#82bd55"
+]);
+
+const dirt=texture("#80502e",[
+    "#633b22","#98613a","#704327","#a06a40"
+]);
+
+const stone=texture("#858585",[
+    "#707070","#999999","#777777","#a2a2a2"
+]);
+
+const grassSide=texture("#5b8734",[
+    "#80502e","#6c923d","#75472a"
+]);
+
+const bedrock=texture("#303030",[
+    "#191919","#484848","#242424","#555555"
+]);
+
+
+/* -------------------------------------------------
+   BLOCKS
+------------------------------------------------- */
+
+const geo=new THREE.BoxGeometry(1,1,1);
+
+const grassMaterials=[
+    new THREE.MeshLambertMaterial({map:grassSide}), // right
+    new THREE.MeshLambertMaterial({map:grassSide}), // left
+    new THREE.MeshLambertMaterial({map:grassTop}),  // top
+    new THREE.MeshLambertMaterial({map:dirt}),      // bottom
+    new THREE.MeshLambertMaterial({map:grassSide}),
+    new THREE.MeshLambertMaterial({map:grassSide})
+];
+
+const dirtMat=new THREE.MeshLambertMaterial({map:dirt});
+const stoneMat=new THREE.MeshLambertMaterial({map:stone});
+const bedrockMat=new THREE.MeshLambertMaterial({map:bedrock});
+
+function block(x,y,z,mat){
+    const m=new THREE.Mesh(geo,mat);
+    m.position.set(x,y,z);
+    scene.add(m);
+    return m;
+}
+
+
+/* -------------------------------------------------
+   WELT
+------------------------------------------------- */
+
+const WORLD=20;
+
+for(let x=-WORLD;x<=WORLD;x++){
+    for(let z=-WORLD;z<=WORLD;z++){
+
+        const height=
+            2+
+            Math.floor(
+                Math.sin(x*.35)*1.2+
+                Math.cos(z*.27)*1.2
+            );
+
+        for(let y=0;y<=height;y++){
+
+            if(y===0){
+                block(x,y,z,bedrockMat);
+            }
+            else if(y<height){
+                block(x,y,z,stoneMat);
+            }
+            else{
+                block(x,y,z,grassMaterials);
+            }
+        }
+    }
+}
+
+
+/* -------------------------------------------------
+   LICHT
+------------------------------------------------- */
+
+const sun=new THREE.DirectionalLight(0xffffff,1.5);
+sun.position.set(30,60,20);
+scene.add(sun);
+
+scene.add(new THREE.HemisphereLight(
+    0xbfe8ff,
+    0x4d3828,
+    1.1
+));
+
+
+/* -------------------------------------------------
+   POINTER LOCK
+------------------------------------------------- */
+
+const start=document.getElementById("start");
+const play=document.getElementById("play");
+
+play.addEventListener("click",()=>{
+    renderer.domElement.requestPointerLock();
+});
+
+document.addEventListener("pointerlockchange",()=>{
+    start.style.display=
+        document.pointerLockElement===renderer.domElement
+        ? "none"
+        : "flex";
+});
+
+
+/* -------------------------------------------------
+   MAUS
+------------------------------------------------- */
+
+let yaw=0;
+let pitch=0;
+
+document.addEventListener("mousemove",e=>{
+
+    if(document.pointerLockElement!==renderer.domElement)return;
+
+    yaw-=e.movementX*0.0022;
+    pitch-=e.movementY*0.0022;
+
+    const limit=Math.PI/2-0.05;
+    pitch=Math.max(-limit,Math.min(limit,pitch));
+
+    camera.rotation.order="YXZ";
+    camera.rotation.y=yaw;
+    camera.rotation.x=pitch;
+});
+
+
+/* -------------------------------------------------
+   WASD
+------------------------------------------------- */
+
+const keys={};
+
+document.addEventListener("keydown",e=>{
+    keys[e.code]=true;
+
+    if([
+        "KeyW",
+        "KeyA",
+        "KeyS",
+        "KeyD",
+        "Space"
+    ].includes(e.code)){
+        e.preventDefault();
+    }
+});
+
+document.addEventListener("keyup",e=>{
+    keys[e.code]=false;
+});
+
+
+/* -------------------------------------------------
+   BEWEGUNG + GRAVITATION
+------------------------------------------------- */
+
+let velocityY=0;
+let grounded=false;
+
+const speed=0.09;
+const gravity=0.012;
+const jump=0.24;
+
+function updatePlayer(){
+
+    if(document.pointerLockElement!==renderer.domElement)
+        return;
+
+    const forward=new THREE.Vector3(
+        -Math.sin(yaw),
+        0,
+        -Math.cos(yaw)
+    );
+
+    const right=new THREE.Vector3(
+        Math.cos(yaw),
+        0,
+        -Math.sin(yaw)
+    );
+
+    const movement=new THREE.Vector3();
+
+    if(keys["KeyW"]) movement.add(forward);
+    if(keys["KeyS"]) movement.sub(forward);
+    if(keys["KeyD"]) movement.add(right);
+    if(keys["KeyA"]) movement.sub(right);
+
+    if(movement.lengthSq()>0){
+        movement.normalize().multiplyScalar(speed);
+        camera.position.add(movement);
+    }
+
+    /* Springen */
+    if(keys["Space"] && grounded){
+        velocityY=jump;
+        grounded=false;
+    }
+
+    velocityY-=gravity;
+    camera.position.y+=velocityY;
+
+    /* einfache Bodenhöhe */
+    const ground=4.0;
+
+    if(camera.position.y<=ground){
+        camera.position.y=ground;
+        velocityY=0;
+        grounded=true;
+    }
+}
+
+
+/* -------------------------------------------------
+   RENDER LOOP
+------------------------------------------------- */
+
+function animate(){
+
+    requestAnimationFrame(animate);
+
+    updatePlayer();
+
+    renderer.render(scene,camera);
+}
+
+animate();
+
+
+/* -------------------------------------------------
+   RESIZE
+------------------------------------------------- */
+
+addEventListener("resize",()=>{
+
+    camera.aspect=innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+
+</body>
+</html>
